@@ -14,6 +14,7 @@
 .glide/
 
 # Tab files
+*.gp3
 *.gp4
 *.gp5
 *.gpx
