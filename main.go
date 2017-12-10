@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -41,17 +43,15 @@ func main() {
 }
 
 func downloadFile(filename, id, referer string) {
-	if _, err := os.Stat(fmt.Sprint("avantasia/", filename)); err == nil {
-		log.Println("File already exists. Fast-forwarding...")
-		return
+	matches, _ := filepath.Glob(fmt.Sprint("avantasia/", filename) + ".*")
+	for _, file := range matches {
+		if _, err := os.Stat(file); err == nil {
+			log.Println("File already exists. Fast-forwarding...")
+			return
+		}
 	}
 
-	out, err := os.Create(fmt.Sprint("avantasia/", filename))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer out.Close()
-
+	client := http.Client{}
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://tabs.ultimate-guitar.com/tab/download?id=%v", id), nil)
 	req.Header.Add("Host", "tabs.ultimate-guitar.com")
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0")
@@ -59,13 +59,19 @@ func downloadFile(filename, id, referer string) {
 	req.Header.Add("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Add("Referer", referer)
 	req.Header.Add("Connection", "keep-alive")
-
-	client := http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
+
+	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
+	extension := splat[len(splat)-1]
+	out, err := os.Create(fmt.Sprint("avantasia/", filename, ".", extension))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
