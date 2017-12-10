@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	url := "https://www.ultimate-guitar.com/tabs/Avantasia_guitar_pro_tabs.htm"
+	url := "https://www.ultimate-guitar.com/tabs/avantasia_guitar_pro_tabs.htm"
 
 	doc, err := goquery.NewDocument(url)
 	if err != nil {
@@ -43,7 +43,7 @@ func main() {
 }
 
 func downloadFile(filename, id, referer string) {
-	matches, _ := filepath.Glob(fmt.Sprint("avantasia/", filename) + ".*")
+	matches, _ := filepath.Glob(fmt.Sprintf("%v/%v", "avantasia", filename) + ".*")
 	for _, file := range matches {
 		if _, err := os.Stat(file); err == nil {
 			log.Println("File already exists. Fast-forwarding...")
@@ -67,7 +67,7 @@ func downloadFile(filename, id, referer string) {
 
 	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
 	extension := splat[len(splat)-1]
-	out, err := os.Create(fmt.Sprint("avantasia/", filename, ".", extension))
+	out, err := os.Create(fmt.Sprintf("%v/%v.%v", "avantasia", filename, extension))
 	if err != nil {
 		log.Fatal(err)
 	}
