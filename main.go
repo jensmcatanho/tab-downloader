@@ -90,12 +90,7 @@ func downloadFile(tab Tab) {
 
 	client := http.Client{}
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://tabs.ultimate-guitar.com/tab/download?id=%v", tab.id), nil)
-	req.Header.Add("Host", "tabs.ultimate-guitar.com")
-	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0")
-	req.Header.Add("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-	req.Header.Add("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Add("Referer", tab.referer)
-	req.Header.Add("Connection", "keep-alive")
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
