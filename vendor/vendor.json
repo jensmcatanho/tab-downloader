@@ -1,6 +1,31 @@
 {
 	"comment": "",
 	"ignore": "test",
-	"package": [],
+	"package": [
+		{
+			"checksumSHA1": "LlvQPCCJxa/4kNQDPBM5fZrtAnU=",
+			"path": "github.com/PuerkitoBio/goquery",
+			"revision": "bc4e06eb0792d1a14661d19dd7822163c25bb6bd",
+			"revisionTime": "2017-12-06T12:16:06Z"
+		},
+		{
+			"checksumSHA1": "2rWSos1D+xqNSGkvEMOG3pntod8=",
+			"path": "github.com/andybalholm/cascadia",
+			"revision": "349dd0209470eabd9514242c688c403c0926d266",
+			"revisionTime": "2016-12-24T14:14:13Z"
+		},
+		{
+			"checksumSHA1": "/PGQlVbw8jILX3tLQaYAg6bTAFI=",
+			"path": "golang.org/x/net/html",
+			"revision": "1087133bc4af3073e18add999345c6ae75918503",
+			"revisionTime": "2017-10-13T01:45:07Z"
+		},
+		{
+			"checksumSHA1": "iWvOOLdDxvI4AVX6px6/HYBPeaQ=",
+			"path": "golang.org/x/net/html/atom",
+			"revision": "1087133bc4af3073e18add999345c6ae75918503",
+			"revisionTime": "2017-10-13T01:45:07Z"
+		}
+	],
 	"rootPath": "jensmcatanho/tab-downloader"
 }
