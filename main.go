@@ -12,8 +12,21 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+type Tab struct {
+	name string
+	id   string
+	url  string
+}
+
+var (
+	numFiles int
+	tabs     []Tab
+	done     chan bool
+)
+
 func main() {
 	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v_guitar_pro_tabs.htm", os.Args[1])
+	done := make(chan bool, 100)
 	os.Mkdir(os.Args[1], os.ModePerm)
 
 	doc, err := goquery.NewDocument(url)
@@ -21,6 +34,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	go processTab()
+	numFiles = 0
 	doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
 		if !s.Find("a").HasClass("song js-tp_link") {
 			tab := s.Find("a")
@@ -36,11 +51,28 @@ func main() {
 			doc.Find("div").Each(func(i int, s *goquery.Selection) {
 				if s.HasClass("textversbox") {
 					tabID, _ := s.Find("input").Attr("value")
-					downloadFile(name, tabID, tabURL)
+					tabs = append(tabs, Tab{name: name, id: tabID, url: tabURL})
+					numFiles++
+					// downloadFile(name, tabID, tabURL)
 				}
 			})
 		}
 	})
+
+	for i := 0; i < numFiles; i++ {
+		fmt.Println(i)
+		<-done
+	}
+}
+
+func processTab() {
+	for true {
+		if len(tabs) > 0 {
+			tab := tabs[0]
+			fmt.Println(tab)
+			tabs = tabs[1:]
+		}
+	}
 }
 
 func downloadFile(filename, id, referer string) {
