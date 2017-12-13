@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -20,62 +19,106 @@ type Tab struct {
 }
 
 var (
-	numFiles  int
-	tabs      []Tab
-	processed chan bool
-	done      chan bool
+	tabs           []Tab
+	tabsProcessed  chan bool
+	tabsDone       chan bool
+	pages          string
+	pagesProcessed chan bool
+	pagesDone      chan bool
 )
 
+/*
 func main() {
 	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v_guitar_pro_tabs.htm", os.Args[1])
-	processed = make(chan bool, 100)
-	done = make(chan bool, 100)
-	os.Mkdir(os.Args[1], os.ModePerm)
+	tabsProcessed = make(chan bool, 100)
+	tabsDone = make(chan bool, 100)
+	pagesProcessed = make(chan bool, 100)
+	pagesDone = make(chan bool, 100)
+	numPages := 0
+	numFiles := 0
 
+}
+func pagesGetter(url string) {
 	doc, err := goquery.NewDocument(url)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+*/
 
-	numFiles = 0
-	go downloadWorker()
-	doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
-		if !s.Find("a").HasClass("song js-tp_link") {
-			tab := s.Find("a")
-			name := tab.Text()
-			log.Printf("Processing %v tab...", name)
-			tabURL, _ := tab.Attr("href")
+func main() {
+	numPages := 0
+	numFiles := 0
+	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
+	tabsProcessed = make(chan bool, 100)
+	tabsDone = make(chan bool, 100)
+	os.Mkdir(os.Args[1], os.ModePerm)
 
-			doc, err := goquery.NewDocument(tabURL)
-			if err != nil {
-				log.Fatal(err)
-			}
+	doc, err := goquery.NewDocument(fmt.Sprint(url, "_guitar_pro_tabs.htm"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-			doc.Find("div").Each(func(i int, s *goquery.Selection) {
-				if s.HasClass("textversbox") {
-					tabID, _ := s.Find("input").Attr("value")
-					tabs = append(tabs, Tab{name: name, id: tabID, referer: tabURL})
-					processed <- true
-					numFiles++
-					// downloadFile(name, tabID, tabURL)
-				}
-			})
+	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		if s.HasClass("ys") {
+			numPages++
 		}
 	})
 
-	for i := 0; i < numFiles; i++ {
-		<-done
+	for i := 1; i <= numPages; i++ {
+		var pageURL string
+		if i == 1 {
+			pageURL = fmt.Sprint(url, "_guitar_pro_tabs.htm")
+		} else {
+			pageURL = fmt.Sprint(url + fmt.Sprintf("_guitar_pro_tabs%d.htm", i))
+		}
+
+		log.Printf("Processing page %v...", pageURL)
+		doc, err = goquery.NewDocument(pageURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go downloadWorker()
+		doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
+			if !s.Find("a").HasClass("song js-tp_link") {
+				tab := s.Find("a")
+				name := tab.Text()
+				log.Printf("Processing %v tab...", name)
+				tabURL, _ := tab.Attr("href")
+
+				doc, err := goquery.NewDocument(tabURL)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				doc.Find("div").Each(func(i int, s *goquery.Selection) {
+					if s.HasClass("textversbox") {
+						tabID, _ := s.Find("input").Attr("value")
+						tabs = append(tabs, Tab{name: name, id: tabID, referer: tabURL})
+						tabsProcessed <- true
+						numFiles++
+					}
+				})
+			}
+		})
 	}
+
+	for i := 0; i < numFiles; i++ {
+		<-tabsDone
+	}
+
 }
 
 func downloadWorker() {
 	for true {
-		<-processed
+		<-tabsProcessed
 		tab := tabs[0]
-		downloadFile(tab)
+		fmt.Printf("%+v\n", tab)
+		//downloadFile(tab)
 		tabs = tabs[1:]
-		time.Sleep(1250 * time.Millisecond)
-		done <- true
+		//		time.Sleep(1250 * time.Millisecond)
+		tabsDone <- true
 	}
 }
 
