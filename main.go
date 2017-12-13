@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -26,15 +27,14 @@ var (
 
 func main() {
 	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v_guitar_pro_tabs.htm", os.Args[1])
-	done := make(chan bool, 100)
-	os.Mkdir(os.Args[1], os.ModePerm)
+	/* done := make(chan bool, 100)
+	 */os.Mkdir(os.Args[1], os.ModePerm)
 
 	doc, err := goquery.NewDocument(url)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go processTab()
 	numFiles = 0
 	doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
 		if !s.Find("a").HasClass("song js-tp_link") {
@@ -60,18 +60,16 @@ func main() {
 	})
 
 	for i := 0; i < numFiles; i++ {
-		fmt.Println(i)
-		<-done
+		processTab()
 	}
 }
 
 func processTab() {
-	for true {
-		if len(tabs) > 0 {
-			tab := tabs[0]
-			fmt.Println(tab)
-			tabs = tabs[1:]
-		}
+	if len(tabs) > 0 {
+		time.Sleep(time.Second)
+		tab := tabs[0]
+		fmt.Println(tab)
+		tabs = tabs[1:]
 	}
 }
 
