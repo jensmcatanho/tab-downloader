@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -19,106 +20,105 @@ type Tab struct {
 }
 
 var (
-	tabs           []Tab
-	tabsProcessed  chan bool
-	tabsDone       chan bool
-	pages          string
-	pagesProcessed chan bool
-	pagesDone      chan bool
+	tabsQueue []Tab
+	numTabs   int
 )
 
-/*
-func main() {
-	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v_guitar_pro_tabs.htm", os.Args[1])
-	tabsProcessed = make(chan bool, 100)
-	tabsDone = make(chan bool, 100)
-	pagesProcessed = make(chan bool, 100)
-	pagesDone = make(chan bool, 100)
-	numPages := 0
-	numFiles := 0
-
-}
-func pagesGetter(url string) {
-	doc, err := goquery.NewDocument(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-*/
-
-func main() {
-	numPages := 0
-	numFiles := 0
-	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
-	tabsProcessed = make(chan bool, 100)
-	tabsDone = make(chan bool, 100)
-	os.Mkdir(os.Args[1], os.ModePerm)
-
+func getNumberOfPages(url string) (numPages int, err error) {
 	doc, err := goquery.NewDocument(fmt.Sprint(url, "_guitar_pro_tabs.htm"))
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
+	numPages++
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
 		if s.HasClass("ys") {
 			numPages++
 		}
 	})
 
+	return
+}
+
+func processPage(url string, processedChannel chan bool, doneChannel chan<- bool) (numFiles int, err error) {
+	log.Printf("Processing page %v...", url)
+	doc, err := goquery.NewDocument(url)
+	if err != nil {
+		return
+	}
+
+	go downloadWorker(processedChannel, doneChannel)
+	doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
+		if !s.Find("a").HasClass("song js-tp_link") {
+			tab := s.Find("a")
+			tabName := tab.Text()
+			log.Printf("Processing %v tab...", tabName)
+			tabURL, _ := tab.Attr("href")
+
+			doc, err := goquery.NewDocument(tabURL)
+			if err != nil {
+				return
+			}
+
+			doc.Find("div").Each(func(i int, s *goquery.Selection) {
+				if s.HasClass("textversbox") {
+					tabID, _ := s.Find("input").Attr("value")
+					tabsQueue = append(tabsQueue, Tab{name: tabName, id: tabID, referer: tabURL})
+					processedChannel <- true
+					numFiles++
+				}
+			})
+		}
+	})
+
+	return
+}
+
+func main() {
+	processedChannel := make(chan bool, 500)
+	doneChannel := make(chan bool, 500)
+
+	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
+	os.Mkdir(os.Args[1], os.ModePerm)
+
+	numPages, err := getNumberOfPages(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	numFiles := 0
 	for i := 1; i <= numPages; i++ {
-		var pageURL string
+		var numFilesAtPage int
 		if i == 1 {
-			pageURL = fmt.Sprint(url, "_guitar_pro_tabs.htm")
+			numFilesAtPage, err = processPage(fmt.Sprint(url+"_guitar_pro_tabs.htm"), processedChannel, doneChannel)
 		} else {
-			pageURL = fmt.Sprint(url + fmt.Sprintf("_guitar_pro_tabs%d.htm", i))
+			numFilesAtPage, err = processPage(fmt.Sprint(url+fmt.Sprintf("_guitar_pro_tabs%d.htm", i)), processedChannel, doneChannel)
 		}
 
-		log.Printf("Processing page %v...", pageURL)
-		doc, err = goquery.NewDocument(pageURL)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		go downloadWorker()
-		doc.Find("tr .tr__lg").Not(".tr__active").Each(func(i int, s *goquery.Selection) {
-			if !s.Find("a").HasClass("song js-tp_link") {
-				tab := s.Find("a")
-				name := tab.Text()
-				log.Printf("Processing %v tab...", name)
-				tabURL, _ := tab.Attr("href")
-
-				doc, err := goquery.NewDocument(tabURL)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				doc.Find("div").Each(func(i int, s *goquery.Selection) {
-					if s.HasClass("textversbox") {
-						tabID, _ := s.Find("input").Attr("value")
-						tabs = append(tabs, Tab{name: name, id: tabID, referer: tabURL})
-						tabsProcessed <- true
-						numFiles++
-					}
-				})
-			}
-		})
+		numFiles += numFilesAtPage
 	}
 
 	for i := 0; i < numFiles; i++ {
-		<-tabsDone
+		<-doneChannel
 	}
 
+	fmt.Println(numFiles)
 }
 
-func downloadWorker() {
+func downloadWorker(processedChannel <-chan bool, doneChannel chan<- bool) {
 	for true {
-		<-tabsProcessed
-		tab := tabs[0]
-		fmt.Printf("%+v\n", tab)
+		<-processedChannel
+		tab := tabsQueue[0]
+		log.Printf("%+v", tab)
 		//downloadFile(tab)
-		tabs = tabs[1:]
-		//		time.Sleep(1250 * time.Millisecond)
-		tabsDone <- true
+		tabsQueue = tabsQueue[1:]
+		time.Sleep(1250 * time.Millisecond)
+		doneChannel <- true
 	}
 }
 
@@ -139,11 +139,13 @@ func downloadFile(tab Tab) {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
+	log.Printf("%+v\n", tab)
 
 	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
 	extension := splat[len(splat)-1]
 	out, err := os.Create(fmt.Sprintf("%v/%v.%v", os.Args[1], tab.name, extension))
 	if err != nil {
+		log.Printf("%v/%v.%v", os.Args[1], tab.name, extension)
 		log.Fatal(err)
 	}
 	defer out.Close()
