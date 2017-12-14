@@ -2,27 +2,51 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"jensmcatanho/tab-downloader/representations"
 	"log"
-	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
-type Tab struct {
-	name    string
-	id      string
-	referer string
-}
-
 var (
-	tabsQueue []Tab
+	tabsQueue []representations.Tab
 	numTabs   int
 )
+
+func main() {
+	processedChannel := make(chan bool, 500)
+	doneChannel := make(chan bool, 500)
+
+	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
+	os.Mkdir(os.Args[1], os.ModePerm)
+
+	numPages, err := getNumberOfPages(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	numFiles := 0
+	for i := 1; i <= numPages; i++ {
+		var numFilesAtPage int
+		if i == 1 {
+			numFilesAtPage, err = processPage(fmt.Sprint(url+"_guitar_pro_tabs.htm"), processedChannel, doneChannel)
+		} else {
+			numFilesAtPage, err = processPage(fmt.Sprint(url+fmt.Sprintf("_guitar_pro_tabs%d.htm", i)), processedChannel, doneChannel)
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		numFiles += numFilesAtPage
+	}
+
+	for i := 0; i < numFiles; i++ {
+		<-doneChannel
+	}
+}
 
 func getNumberOfPages(url string) (numPages int, err error) {
 	doc, err := goquery.NewDocument(fmt.Sprint(url, "_guitar_pro_tabs.htm"))
@@ -64,7 +88,7 @@ func processPage(url string, processedChannel chan bool, doneChannel chan<- bool
 			doc.Find("div").Each(func(i int, s *goquery.Selection) {
 				if s.HasClass("textversbox") {
 					tabID, _ := s.Find("input").Attr("value")
-					tabsQueue = append(tabsQueue, Tab{name: tabName, id: tabID, referer: tabURL})
+					tabsQueue = append(tabsQueue, *representations.NewTab(tabName, tabID, tabURL))
 					processedChannel <- true
 					numFiles++
 				}
@@ -75,84 +99,18 @@ func processPage(url string, processedChannel chan bool, doneChannel chan<- bool
 	return
 }
 
-func main() {
-	processedChannel := make(chan bool, 500)
-	doneChannel := make(chan bool, 500)
-
-	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
-	os.Mkdir(os.Args[1], os.ModePerm)
-
-	numPages, err := getNumberOfPages(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	numFiles := 0
-	for i := 1; i <= numPages; i++ {
-		var numFilesAtPage int
-		if i == 1 {
-			numFilesAtPage, err = processPage(fmt.Sprint(url+"_guitar_pro_tabs.htm"), processedChannel, doneChannel)
-		} else {
-			numFilesAtPage, err = processPage(fmt.Sprint(url+fmt.Sprintf("_guitar_pro_tabs%d.htm", i)), processedChannel, doneChannel)
-		}
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		numFiles += numFilesAtPage
-	}
-
-	for i := 0; i < numFiles; i++ {
-		<-doneChannel
-	}
-
-	fmt.Println(numFiles)
-}
-
 func downloadWorker(processedChannel <-chan bool, doneChannel chan<- bool) {
 	for true {
 		<-processedChannel
 		tab := tabsQueue[0]
-		log.Printf("%+v", tab)
-		//downloadFile(tab)
+
+		err := tab.Download()
+		if err != nil {
+			log.Panic(err)
+		}
+
 		tabsQueue = tabsQueue[1:]
 		time.Sleep(1250 * time.Millisecond)
 		doneChannel <- true
-	}
-}
-
-func downloadFile(tab Tab) {
-	matches, _ := filepath.Glob(fmt.Sprintf("%v/%v", os.Args[1], tab.name) + ".*")
-	for _, file := range matches {
-		if _, err := os.Stat(file); err == nil {
-			log.Println("File already exists. Fast-forwarding...")
-			return
-		}
-	}
-
-	client := http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://tabs.ultimate-guitar.com/tab/download?id=%v", tab.id), nil)
-	req.Header.Add("Referer", tab.referer)
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-	log.Printf("%+v\n", tab)
-
-	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
-	extension := splat[len(splat)-1]
-	out, err := os.Create(fmt.Sprintf("%v/%v.%v", os.Args[1], tab.name, extension))
-	if err != nil {
-		log.Printf("%v/%v.%v", os.Args[1], tab.name, extension)
-		log.Fatal(err)
-	}
-	defer out.Close()
-
-	log.Printf("Downloading %v file (#%v)...", tab.name, tab.id)
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		log.Fatal(err)
 	}
 }
