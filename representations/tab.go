@@ -25,11 +25,13 @@ func NewTab(name, id, referer string) *Tab {
 }
 
 func (t *Tab) Download() (err error) {
-	matches, _ := filepath.Glob(fmt.Sprintf("%v/%v", os.Args[1], t.Name) + ".*")
+	matches, _ := filepath.Glob(fmt.Sprintf("bands/%v/%v", os.Args[1], t.Name) + ".*")
 	for _, file := range matches {
-		if _, err := os.Stat(file); err == nil {
+		if _, err = os.Stat(file); err == nil {
 			log.Println("File already exists. Fast-forwarding...")
-			return nil
+			return
+		} else {
+			return
 		}
 	}
 
@@ -44,7 +46,7 @@ func (t *Tab) Download() (err error) {
 
 	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
 	extension := splat[len(splat)-1]
-	out, err := os.Create(fmt.Sprintf("%v/%v.%v", os.Args[1], t.Name, extension))
+	out, err := os.Create(fmt.Sprintf("bands/%v/%v.%v", os.Args[1], t.Name, extension))
 	if err != nil {
 		return
 	}
