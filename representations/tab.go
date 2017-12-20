@@ -12,29 +12,33 @@ import (
 
 type Tab struct {
 	Name    string
+	Band    string
 	ID      string
 	Referer string
 }
 
-func NewTab(name, id, referer string) *Tab {
+func NewTab(name, band, id, referer string) *Tab {
 	return &Tab{
 		Name:    name,
+		Band:    band,
 		ID:      id,
 		Referer: referer,
 	}
 }
 
 func (t *Tab) Download() (err error) {
-	matches, _ := filepath.Glob(fmt.Sprintf("bands/%v/%v", os.Args[1], t.Name) + ".*")
+	matches, _ := filepath.Glob(fmt.Sprintf("bands/%v/%v", t.Band, t.Name) + ".*")
 	for _, file := range matches {
 		if _, err = os.Stat(file); err == nil {
-			log.Println("File already exists. Fast-forwarding...")
+			log.Printf("%v file already exists. Fast-forwarding...", t.Name)
 			return
 		} else {
 			return
 		}
 	}
 
+
+	
 	client := http.Client{}
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://tabs.ultimate-guitar.com/tab/download?id=%v", t.ID), nil)
 	req.Header.Add("Referer", t.Referer)
@@ -46,7 +50,7 @@ func (t *Tab) Download() (err error) {
 
 	splat := strings.Split(resp.Header.Get("Content-Disposition"), ".")
 	extension := splat[len(splat)-1]
-	out, err := os.Create(fmt.Sprintf("bands/%v/%v.%v", os.Args[1], t.Name, extension))
+	out, err := os.Create(fmt.Sprintf("bands/%v/%v.%v", t.Band, t.Name, extension))
 	if err != nil {
 		return
 	}
