@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"jensmcatanho/tab-downloader/representations"
+	"tab-downloader/representations"
 	"log"
 	"os"
 	"time"
@@ -19,8 +19,12 @@ func main() {
 	processedChannel := make(chan bool, 500)
 	doneChannel := make(chan bool, 500)
 
+	if len(os.Args) < 2 {
+		log.Fatal("Invalid number of arguments")
+	}
+
 	url := fmt.Sprintf("https://www.ultimate-guitar.com/tabs/%v", os.Args[1])
-	os.Mkdir(os.Args[1], os.ModePerm)
+	os.MkdirAll(fmt.Sprintf("bands/%v", os.Args[1]), os.ModePerm)
 
 	numPages, err := getNumberOfPages(url)
 	if err != nil {
@@ -106,7 +110,7 @@ func downloadWorker(processedChannel <-chan bool, doneChannel chan<- bool) {
 
 		err := tab.Download()
 		if err != nil {
-			log.Panic(err)
+			log.Printf("Couldn't download tab %v, error: %v", tab.Name, err)
 		}
 
 		tabsQueue = tabsQueue[1:]
